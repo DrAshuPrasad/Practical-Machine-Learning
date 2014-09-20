@@ -1,0 +1,83 @@
+---
+title: "Practical Machine Learning Writeup"
+author: "Ashutosh Prasad"
+date: "Thursday, September 18, 2014"
+output: html_document
+---
+## Weight Lifting Exercise
+Machine learning is a process of using algorithm to learn from data. This analysis is part of coursework for Practical Machine Learning course. The dataset is sourced from http://groupware.les.inf.puc-rio.br/har.
+
+The dataset has information about six participants, who perform barbell lifts in five different ways - one correct and four incorrect. There are two datafiles - one is training data, the other is testing data. The goal is to predict the manner in which the participants in testing data have done the exercise, after making scientific observation of training data.
+
+### Project Plan
+    Use classe variable to predict the manner in which participants did the exercise.
+    Use Random Forests to perform machine learning.
+    Do the cross-validation.
+    Calculate out of sample error.
+    Predict about all the twenty participants in testing data.
+
+### Set environment, load libraries, and read train data and test data
+```{r}
+setwd("C:/largedata")
+library(Hmisc); library(foreach); library(doParallel); library(e1071)
+library(pander); library(caret); library(randomForest); library(knitr)
+opts_chunk$set(cache=TRUE,echo=TRUE)
+options(width=120)
+
+train.dat <- read.csv("./data/pml-training.csv")
+test.dat <- read.csv("./data/pml-testing.csv")
+```
+
+### Clean train.dat and then split it into two for cross-validation
+```{r}
+train.int1 <- table(colSums(is.na(train.dat)))
+pandoc.table(train.int1, style="grid", caption="NA frequency in TRAINING data")
+
+# 93 columns have no NAs, 67 columns have NAs.
+NAColumns<-colSums(is.na(train.dat))>18000
+train.goodData<-train.dat[!NAColumns]
+sum(is.na(train.goodData))
+# train.goodData_X<-train.goodData[,-c(union(grep("^kurtosis_",colnames(train.goodData)),grep("^skewness_",colnames(train.goodData))))]
+# train.goodData_X<-train.goodData_X[,-c(union(grep("^..._yaw_",colnames(train.goodData_X)),grep("^amplitude_yaw_",colnames(train.goodData_X))))]
+
+# Now split the train.goodData
+split<-createDataPartition(y=train.goodData$classe,p=0.6,list=FALSE)
+train.build<-train.goodData[split,]
+train.validate<-train.goodData[-split,]
+```
+
+### Clean test.dat
+```{r}
+NAColumns<-colSums(is.na(test.dat))>18
+test.goodData<-test.dat[!NAColumns]
+sum(is.na(test.goodData))
+```
+
+### Explore data
+```{r}
+pandoc.table(summary(train.build$classe), style="grid", caption="train.build$classe frequency table")
+```
+
+### Build Model
+```{r}
+# It takes a very long time on my system to build the model. Once created, I saved it.
+# modelRF <- train(classe ~., method="rf", data=train.build, trControl=trainControl(method='cv'), number=5, allowParallel=TRUE )
+# saveRDS(modelRF,"modelRF.RDS")
+# Use the saved modelRF.RDS.
+modelRF<-readRDS("modelRF.RDS")
+mean(predict(modelRF, train.validate) == train.validate$classe) * 100
+```
+On one subset of training data, the model is reported to be 99.97% accurate (in the R console). The expected out of sample error, or generalization error, should be 0.02%. 
+
+### Prediction on unused subset of training data and Out of Sample Error
+```{r}
+prediction<-predict(modelRF,train.validate)
+confusionMatrix(prediction,train.validate$classe)
+```
+Generalization Error, or Out of Sample Error, is 0.02% (reported in R console).
+
+### Prediction on testing data (pml-testing.csv)
+```{r}
+predict(modelRF,test.goodData)
+```
+The prediction is that all the participants fall in Level A.
